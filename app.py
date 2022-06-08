@@ -1,7 +1,11 @@
 from flask import Flask, request
 import MarketplaceScraper
+import Database
 
 API = Flask(__name__)
+
+Database.init()
+# Database.all_seen()
 
 
 @API.route("/locations", methods=["GET"])
@@ -50,3 +54,6 @@ def search():
     response["data"] = data
 
     return response
+
+
+# /search?locationLatitude=-33.43179&locationLongitude=-70.6094&listingQuery=pvm

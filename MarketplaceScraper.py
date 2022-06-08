@@ -1,6 +1,7 @@
 import requests
 import json
 import copy
+import Database
 
 GRAPHQL_URL = "https://www.facebook.com/api/graphql/"
 GRAPHQL_HEADERS = {
@@ -50,7 +51,32 @@ def getListings(locationLatitude, locationLongitude, listingQuery, numPageResult
     rawPageResults = []  # Un-parsed list of JSON results from each page
 
     requestPayload = {
-        "variables": """{"count":24, "params":{"bqf":{"callsite":"COMMERCE_MKTPLACE_WWW","query":"%s"},"browse_request_params":{"commerce_enable_local_pickup":true,"commerce_enable_shipping":true,"commerce_search_and_rp_available":true,"commerce_search_and_rp_condition":null,"commerce_search_and_rp_ctime_days":null,"filter_location_latitude":%s,"filter_location_longitude":%s,"filter_price_lower_bound":0,"filter_price_upper_bound":214748364700,"filter_radius_km":16},"custom_request_params":{"surface":"SEARCH"}}}""" % (listingQuery, locationLatitude, locationLongitude),
+        "variables": """
+        {
+            "count": 24,
+            "params": {
+                "bqf": {
+                "callsite": "COMMERCE_MKTPLACE_WWW",
+                "query": "%s"
+                },
+                "browse_request_params": {
+                "commerce_enable_local_pickup": true,
+                "commerce_enable_shipping": true,
+                "commerce_search_and_rp_available": true,
+                "commerce_search_and_rp_condition": null,
+                "commerce_search_and_rp_ctime_days": null,
+                "filter_location_latitude": %s,
+                "filter_location_longitude": %s,
+                "filter_price_lower_bound": 0,
+                "filter_price_upper_bound": 214748364700,
+                "filter_radius_km": 16
+                },
+                "custom_request_params": {
+                "surface": "SEARCH"
+                }
+            }
+        }
+        """ % (listingQuery, locationLatitude, locationLongitude),
         "doc_id": "7111939778879383"
     }
 
@@ -75,7 +101,7 @@ def getListings(locationLatitude, locationLongitude, listingQuery, numPageResult
                 requestPayloadCopy["variables"] = requestPayloadCopy["variables"].split(
                 )
                 requestPayloadCopy["variables"].insert(
-                    1, """"cursor":'{}',""".format(cursor))
+                    1, """"cursor":"{}",""".format(cursor))
                 requestPayloadCopy["variables"] = "".join(
                     requestPayloadCopy["variables"])
 
@@ -157,6 +183,12 @@ def parsePageResults(rawPageResults):
                 sellerLocation = listing["node"]["listing"]["location"]["reverse_geocode"]["city_page"]["display_name"]
                 sellerType = listing["node"]["listing"]["marketplace_listing_seller"]["__typename"]
 
+                isSeen = Database.find_seen(listingID) != None
+
+                if (not isSeen):
+                    Database.insert_seen(
+                        listingID, listingName, listingCurrentPrice, listingPrimaryPhotoURL, sellerLocation)
+
                 # Add the listing to its corresponding page
                 listingPages[pageIndex]["listings"].append({
                     "id": listingID,
@@ -167,7 +199,8 @@ def parsePageResults(rawPageResults):
                     "primaryPhotoURL": listingPrimaryPhotoURL,
                     "sellerName": sellerName,
                     "sellerLocation": sellerLocation,
-                    "sellerType": sellerType
+                    "sellerType": sellerType,
+                    "isSeen": isSeen
                 })
 
         pageIndex += 1

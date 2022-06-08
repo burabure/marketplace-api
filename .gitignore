@@ -10,3 +10,5 @@ venv/
 
 # Development Files
 test.py
+
+*.db
