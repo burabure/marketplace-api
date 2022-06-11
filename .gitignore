@@ -12,3 +12,7 @@ venv/
 test.py
 
 *.db
+
+__pycache__
+login.py
+scrape.py

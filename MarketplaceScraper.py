@@ -2,6 +2,7 @@ import requests
 import json
 import copy
 import Database
+#from login import login
 
 GRAPHQL_URL = "https://www.facebook.com/api/graphql/"
 GRAPHQL_HEADERS = {
@@ -10,12 +11,22 @@ GRAPHQL_HEADERS = {
 }
 
 
+def set_requests_session():
+    # credentials = login()
+    s = requests.Session()
+    # s.cookies.update(credentials['cookie'])
+    return s
+
+
+Session = set_requests_session()
+
+
 def getLocations(locationQuery):
     data = {}
 
     requestPayload = {
         "variables": """{"params": {"caller": "MARKETPLACE", "page_category": ["CITY", "SUBCITY", "NEIGHBORHOOD","POSTAL_CODE"], "query": "%s"}}""" % (locationQuery),
-        "doc_id": "5585904654783609"
+        "doc_id": "5585904654783609",
     }
 
     status, error, facebookResponse = getFacebookResponse(requestPayload)
@@ -53,34 +64,54 @@ def getListings(locationLatitude, locationLongitude, listingQuery, numPageResult
     requestPayload = {
         "variables": """
         {
+            "buyLocation": { "latitude": %s, "longitude": %s },
+            "contextual_data": null,
             "count": 24,
+            "cursor": null,
+            "flashSaleEventID": "",
+            "hasFlashSaleEventID": false,
+            "marketplaceSearchMetadataCardEnabled": true,
             "params": {
                 "bqf": {
-                "callsite": "COMMERCE_MKTPLACE_WWW",
-                "query": "%s"
+                    "callsite": "COMMERCE_MKTPLACE_WWW",
+                    "query": "%s"
                 },
                 "browse_request_params": {
-                "commerce_enable_local_pickup": true,
-                "commerce_enable_shipping": true,
-                "commerce_search_and_rp_available": true,
-                "commerce_search_and_rp_condition": null,
-                "commerce_search_and_rp_ctime_days": null,
-                "filter_location_latitude": %s,
-                "filter_location_longitude": %s,
-                "filter_price_lower_bound": 0,
-                "filter_price_upper_bound": 214748364700,
-                "filter_radius_km": 16
+                    "commerce_enable_local_pickup": true,
+                    "commerce_enable_shipping": true,
+                    "commerce_search_and_rp_available": true,
+                    "commerce_search_and_rp_category_id": [],
+                    "commerce_search_and_rp_condition": null,
+                    "commerce_search_and_rp_ctime_days": null,
+                    "filter_location_latitude": %s,
+                    "filter_location_longitude": %s,
+                    "filter_price_lower_bound": 0,
+                    "filter_price_upper_bound": 214748364700,
+                    "filter_radius_km": 500
                 },
                 "custom_request_params": {
-                "surface": "SEARCH"
+                    "browse_context": null,
+                    "contextual_filters": [],
+                    "referral_code": null,
+                    "saved_search_strid": null,
+                    "search_vertical": "C2C",
+                    "seo_url": null,
+                    "surface": "SEARCH",
+                    "virtual_contextual_filters": []
                 }
-            }
+            },
+            "savedSearchID": null,
+            "scale": 1,
+            "shouldIncludePopularSearches": false,
+            "vehicleParams": ""
         }
-        """ % (listingQuery, locationLatitude, locationLongitude),
-        "doc_id": "7111939778879383"
+        """ % (locationLatitude, locationLongitude, listingQuery, locationLatitude, locationLongitude),
+        "doc_id": "4786385241466685",
     }
 
     status, error, facebookResponse = getFacebookResponse(requestPayload)
+
+    print(facebookResponse, status, error)
 
     if (status == "Success"):
         facebookResponseJSON = json.loads(facebookResponse.text)
@@ -117,7 +148,7 @@ def getListings(locationLatitude, locationLongitude, listingQuery, numPageResult
         return (status, error, data)
 
     # Parse the raw page results and set as the value of listingPages
-    data["listingPages"] = parsePageResults(rawPageResults)
+    data["listings"] = parsePageResults(rawPageResults)
     return (status, error, data)
 
 
@@ -128,7 +159,7 @@ def getFacebookResponse(requestPayload):
 
     # Try making post request to Facebook, excpet return
     try:
-        facebookResponse = requests.post(
+        facebookResponse = Session.post(
             GRAPHQL_URL, headers=GRAPHQL_HEADERS, data=requestPayload)
     except requests.exceptions.RequestException as requestError:
         status = "Failure"
@@ -141,7 +172,7 @@ def getFacebookResponse(requestPayload):
         facebookResponseJSON = json.loads(facebookResponse.text)
 
         if (facebookResponseJSON.get("errors")):
-            status = "Failure"
+            # status = "Failure"
             error["source"] = "Facebook"
             error["message"] = facebookResponseJSON["errors"][0]["message"]
     else:
@@ -155,14 +186,10 @@ def getFacebookResponse(requestPayload):
 
 # Helper function
 def parsePageResults(rawPageResults):
-    listingPages = []
+    listings = []
 
     pageIndex = 0
     for rawPageResult in rawPageResults:
-
-        # Create a new listings object within the listingPages array
-        listingPages.append({"listings": []})
-
         for listing in rawPageResult["data"]["marketplace_search"]["feed_units"]["edges"]:
 
             # If object is a listing
@@ -183,14 +210,11 @@ def parsePageResults(rawPageResults):
                 sellerLocation = listing["node"]["listing"]["location"]["reverse_geocode"]["city_page"]["display_name"]
                 sellerType = listing["node"]["listing"]["marketplace_listing_seller"]["__typename"]
 
-                isSeen = Database.find_seen(listingID) != None
-
-                if (not isSeen):
-                    Database.insert_seen(
-                        listingID, listingName, listingCurrentPrice, listingPrimaryPhotoURL, sellerLocation)
+                Database.insert_listing(
+                    listingID, listingName, listingCurrentPrice, listingPrimaryPhotoURL, sellerLocation)
 
                 # Add the listing to its corresponding page
-                listingPages[pageIndex]["listings"].append({
+                listings.append({
                     "id": listingID,
                     "name": listingName,
                     "currentPrice": listingCurrentPrice,
@@ -199,10 +223,9 @@ def parsePageResults(rawPageResults):
                     "primaryPhotoURL": listingPrimaryPhotoURL,
                     "sellerName": sellerName,
                     "sellerLocation": sellerLocation,
-                    "sellerType": sellerType,
-                    "isSeen": isSeen
+                    "sellerType": sellerType
                 })
 
         pageIndex += 1
 
-    return listingPages
+    return listings

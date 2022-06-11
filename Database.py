@@ -2,8 +2,16 @@ import sqlite3
 import html
 
 
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+
+
 def __connect():
     connection = sqlite3.connect('marketplace.db')
+    connection.row_factory = dict_factory
     cursor = connection.cursor()
     return [connection, cursor]
 
@@ -12,43 +20,42 @@ def init():
     [connection, cursor] = __connect()
 
     cursor.execute(
-        """CREATE TABLE IF NOT EXISTS seen_listings (
+        """CREATE TABLE IF NOT EXISTS listings (
             id VARCHAR(255) primary key,
             title VARCHAR(255),
             price VARCHAR(255),
             primary_photo_url VARCHAR,
-            seller_name VARCHAR(255)
+            seller_name VARCHAR(255),
+            dismissed BOOLEAN
         )""")
     connection.commit()
     connection.close()
 
 
-def insert_seen(id, name, currentPrice, primaryPhotoUrl, sellerName):
+def insert_listing(id, name, currentPrice, primaryPhotoUrl, sellerName):
     [connection, cursor] = __connect()
 
-    cursor.execute("""INSERT OR IGNORE INTO seen_listings VALUES ("%s", "%s", "%s", "%s", "%s")""" % (
+    cursor.execute("""INSERT OR IGNORE INTO listings VALUES ("%s", "%s", "%s", "%s", "%s", False)""" % (
         id, html.escape(name), currentPrice, primaryPhotoUrl, sellerName))
     connection.commit()
     connection.close()
 
 
-def all_seen():
+def all_listings():
     [connection, cursor] = __connect()
 
-    count = cursor.execute("SELECT COUNT(*) FROM seen_listings").fetchone()[0]
-    print('SEEN IDS:', count)
-
-    for row in cursor.execute("SELECT * FROM seen_listings"):
-        print(row)
-
+    cursor.execute("SELECT * FROM listings")
+    results = cursor.fetchall()
     connection.close()
 
+    return results
 
-def find_seen(id):
+
+def find_listing(id):
     [connection, cursor] = __connect()
 
     result = cursor.execute(
-        "SELECT * FROM seen_listings WHERE id = %s" % id).fetchone()
+        "SELECT * FROM listings WHERE id = %s" % id).fetchone()
     connection.close()
 
     return result[0] if result != None else None
