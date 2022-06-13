@@ -43,6 +43,12 @@ LOCATIONS = [
 ]
 
 
+@ API.after_request
+def add_header(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
 @ API.route("/listings", methods=["GET"])
 def listings():
     response = {}

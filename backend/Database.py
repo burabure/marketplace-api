@@ -1,5 +1,6 @@
 import sqlite3
 import html
+import time
 
 
 def dict_factory(cursor, row):
@@ -21,22 +22,23 @@ def init():
 
     cursor.execute(
         """CREATE TABLE IF NOT EXISTS listings (
-            id VARCHAR(255) primary key,
-            title VARCHAR(255),
-            price VARCHAR(255),
-            primary_photo_url VARCHAR,
-            seller_name VARCHAR(255),
-            dismissed BOOLEAN
+            id TEXT primary key,
+            title TEXT,
+            price TEXT,
+            primaryPhotoUrl TEXT,
+            sellerLocation TEXT,
+            dismissed BOOLEAN,
+            seenAt INTEGER
         )""")
     connection.commit()
     connection.close()
 
 
-def insert_listing(id, name, currentPrice, primaryPhotoUrl, sellerName):
+def insert_listing(id, name, currentPrice, primaryPhotoUrl, sellerLocation):
     [connection, cursor] = __connect()
 
-    cursor.execute("""INSERT OR IGNORE INTO listings VALUES ("%s", "%s", "%s", "%s", "%s", False)""" % (
-        id, html.escape(name), currentPrice, primaryPhotoUrl, sellerName))
+    cursor.execute("""INSERT OR IGNORE INTO listings VALUES ("%s", "%s", "%s", "%s", "%s", False, "%s")""" % (
+        id, html.escape(name), currentPrice, primaryPhotoUrl, sellerLocation, time.time()))
     connection.commit()
     connection.close()
 
@@ -44,7 +46,7 @@ def insert_listing(id, name, currentPrice, primaryPhotoUrl, sellerName):
 def all_listings():
     [connection, cursor] = __connect()
 
-    cursor.execute("SELECT * FROM listings")
+    cursor.execute("SELECT * FROM listings ORDER BY seenAt DESC")
     results = cursor.fetchall()
     connection.close()
 
